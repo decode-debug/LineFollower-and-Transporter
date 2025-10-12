@@ -92,11 +92,11 @@ Used for steering control in the full-steering variants.
 
 ---
 
-## 📁 Repository Structure
-├── LineFollowerPython.py (Differential steering, A/B + 2×Color)
-├── LineFollowerPythonColorReader.py (Brightness logger for calibration)
-├── LineFollowerPythonWithPID.py (“PID” name, still threshold-based)
-├── LineFollowerFullSteering.py (Steering axle + PID steering angle)
-├── LineFollowerFullSteeringWithSpeed.py (Steering axle + WIP dynamic speed)
-├── simple_pid.py (Standalone PID controller)
-└── README.md (This documentation file)
+.
+├── LineFollowerPython.py                  (Differential steering, A/B + 2×Color)
+├── LineFollowerPythonColorReader.py       (Brightness logger for calibration)
+├── LineFollowerPythonWithPID.py           (“PID” name, still threshold-based)
+├── LineFollowerFullSteering.py            (Steering axle + PID steering angle)
+├── LineFollowerFullSteeringWithSpeed.py   (Steering axle + WIP dynamic speed)
+├── simple_pid.py                          (Standalone PID controller)
+└── README.md                              (This documentation file)
