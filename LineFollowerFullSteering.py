@@ -4,7 +4,8 @@ from ev3dev2.sensor.lego import ColorSensor
 from ev3dev2.motor import LargeMotor, OUTPUT_A, OUTPUT_B
 from ev3dev2.motor import MediumMotor, OUTPUT_C
 from ev3dev2.motor import ServoMotor, MotorSet
-
+from ev3dev2.motor import SpeedPercent
+from simple_pid import PIDController
 # Initialize the color sensor
 left_color_sensor = ColorSensor(INPUT_1) # Connect to port 1 (1st port from the left)
 right_color_sensor = ColorSensor(INPUT_2) # Connect to port 2 (2st port from the left)
@@ -19,17 +20,12 @@ robotsteering = ServoMotor(OUTPUT_C)
 # Steering parameters
 BASE = 40              # Base speed
 KP   = 1.2             # Amplification of the proportional term
-KI   = 0.0             # Amplification of the integral term
-CLAMP = 100            # speed clamp
+KI   = 0.5             # Amplification of the integral term
+KD   = 0.3             # Amplification of the derivative term
+SpeedCLAMP = 100       # speed clamp
+ArcClamp = 90          # Arc clamp
 DT = 0.02              # sampling time (50Hz)
-
-# Color thresholds
-BLACK = 15
-WHITE = 85
-
-
-
-from ev3dev2.motor import SpeedPercent
+robotsteering.reset()  # Reset the steering motor to 0 position
 
 def set_speed_percent(group, speed=0):
     """
@@ -50,6 +46,21 @@ def set_speed_percent(group, speed=0):
     for m in group.motors:
         m.on(sp)
 
+def turn_degrees(steermotor, LightDifference):
+    """
+    Turn the steering motor to a specific angle in degrees.
+    :param steermotor: ServoMotor instance
+    :param degrees: Angle in degrees (-90..90)
+    """
+    pid = PIDController(kp=KP, ki=KI, kd=KD, dt=DT, integral_limit=ArcClamp, use_angle=True)
+
+    d = pid.compute(0, LightDifference)  # error = 0 - LightDifference
+
+    steermotor.on_to_position(SpeedPercent(20), d, brake=False, block=False)
+
+
+
+# Start the line following loop
 try:
     while True:
         Leftlight = left_color_sensor.reflected_light_intensity
@@ -60,13 +71,11 @@ try:
         if abs(LightDifference) < 5:
             # To do: make it steer with derivative and integral component
             set_speed_percent(group, 50)  # Move forward at 50% speed
-            robotsteering.on_for_degrees(0, 0, brake=False, block=False)  # No steering
-        elif LightDifference >= 5:
+            robotsteering.turn_degrees(0)  # No steering
+        else:
             set_speed_percent(group, 30)  # Move forward at 30% speed
-            robotsteering.on_for_degrees(-30, 10, brake=False, block=False)  # Turn left
-        elif LightDifference <= -5:
-            set_speed_percent(group, 30)  # Move forward at 30% speed
-            robotsteering.on_for_degrees(30, 10, brake=False, block=False)  # Turn right
+            robotsteering.turn_degrees(LightDifference)  # Turn left or right based on light difference
+
 except KeyboardInterrupt:
     print("Line following stopped by user.")
 
