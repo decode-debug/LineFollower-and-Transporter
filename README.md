@@ -92,12 +92,11 @@ Used for steering control in the full-steering variants.
 
 ---
 
-Structure
-.
-├── LineFollowerPython.py                  # Różnicowe sterowanie progowe (A/B + 2×Color)
-├── LineFollowerPythonColorReader.py       # Logowanie jasności do kalibracji progów
-├── LineFollowerPythonWithPID.py           # Nazwa „PID”, ale logika progowa
-├── LineFollowerFullSteering.py            # Oś skrętna + PID kąta skrętu
-├── LineFollowerFullSteeringWithSpeed.py   # Oś skrętna + (WIP) prędkość ~ skręt
-├── simple_pid.py                          # Niezależny kontroler PID
-└── README.md                              # (Ten plik – uzupełniona wersja)
+## 📁 Repository Structure
+├── LineFollowerPython.py (Differential steering, A/B + 2×Color)
+├── LineFollowerPythonColorReader.py (Brightness logger for calibration)
+├── LineFollowerPythonWithPID.py (“PID” name, still threshold-based)
+├── LineFollowerFullSteering.py (Steering axle + PID steering angle)
+├── LineFollowerFullSteeringWithSpeed.py (Steering axle + WIP dynamic speed)
+├── simple_pid.py (Standalone PID controller)
+└── README.md (This documentation file)
