@@ -43,7 +43,7 @@ class PIDController:
     def compute(self, setpoint, measured_value):
         if measured_value == 0:
             return 0
-        
+
         # 1) Error (optionally wrapped for angular variables)
         if self.use_angle:
             error = self._wrap_angle_rad(setpoint - measured_value)

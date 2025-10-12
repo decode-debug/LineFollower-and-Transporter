@@ -33,7 +33,7 @@ def set_speed_percent(group, speed=0):
     :param group: Motor or MotorSet instance
     :param speed: Speed in percents (-100..100)
     """
-    # ucinamy do zakresu
+    # make sure speed is an integer in -100..100
     s = max(-100, min(100, int(speed)))
 
     if s == 0:
@@ -57,7 +57,6 @@ def turn_degrees(steermotor, LightDifference):
     d = pid.compute(0, LightDifference)  # error = 0 - LightDifference
 
     steermotor.on_to_position(SpeedPercent(20), d, brake=False, block=False)
-
 
 
 # Start the line following loop
