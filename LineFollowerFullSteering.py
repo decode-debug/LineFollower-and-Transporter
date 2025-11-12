@@ -7,13 +7,13 @@ from ev3dev2.motor import ServoMotor, MotorSet
 from ev3dev2.motor import SpeedPercent
 from simple_pid import PIDController
 # Initialize the color sensor
-left_color_sensor = ColorSensor(INPUT_1) # Connect to port 1 (1st port from the left)
-right_color_sensor = ColorSensor(INPUT_2) # Connect to port 2 (2st port from the left)
+left_color_sensor = ColorSensor(INPUT_1)   # Connect to port 1 (1st port from the left)
+right_color_sensor = ColorSensor(INPUT_2)  # Connect to port 2 (2st port from the left)
 
 # Initialize the motors
-left_motor = LargeMotor(OUTPUT_A)  # Connect to port A (left motor)
-right_motor = LargeMotor(OUTPUT_B) # Connect to port B (right motor)
-steermotor = MediumMotor(OUTPUT_C) # Connect to port C (steering motor)
+left_motor = LargeMotor(OUTPUT_A)   # Connect to port A (left motor)
+right_motor = LargeMotor(OUTPUT_B)  # Connect to port B (right motor)
+steermotor = MediumMotor(OUTPUT_C)  # Connect to port C (steering motor)
 group = MotorSet((OUTPUT_A, OUTPUT_B))
 robotsteering = ServoMotor(OUTPUT_C)
 
