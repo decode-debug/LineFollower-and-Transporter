@@ -9,10 +9,43 @@ The repository includes multiple variants of increasing complexity, from drive l
 
 ### `linefollower.py`
 
+A line-following program. This script uses a differential drive (tank drive) configuration.
+
+Motors: 2 × Large Motors (Ports A & B) used for propulsion and steering.
+
+Sensors: 2 × Color Sensors (Ports 1 & 2) for line detection.
+
+Algorithm: Implements a PID controller for line following. The robot calculates an error (error = R - L) based on the difference in reflected light intensity from both sensors. This correction is then used to dynamically adjust the speeds of the left and right motors, steering the robot to stay on the line's edge.
 
 ---
+
 ### `transporter.py`
 
+An advanced version of the line-following robot, which can also react to colored markers and operate a gripper. It uses a Finite State Machine (FSM) to manage its behavior.
+
+Motors: 2 × Large Motors (Ports A & B) for propulsion (tank drive) and 1 × Medium Motor (Port C) as a gripper (optional).
+
+Sensors: 2 × Color Sensors (Ports 1 & 2) for line and color detection.
+
+#### Algorithm:
+
+Line Following: Uses a P (Proportional) controller to follow the black line.
+
+State Machine (FSM): The robot operates in one of several states:
+
+FOLLOW_BLACK: Follows the black line while searching for colors (e.g., red, green).
+
+ROTATING: After detecting a new color with one sensor, it rotates to align both sensors on that color.
+
+FOLLOW_COLOR: Follows a colored line (e.g., red).
+
+ACTION: When both sensors detect a colored marker, the robot stops to perform a gripper action.
+
+###### Gripper Action:
+
+If the gripper is open (grip_state == "open"), the robot closes the gripper (grabs an object), turns 180 degrees, and continues driving.
+
+If the gripper is closed (grip_state == "closed"), the robot opens the gripper (drops the object), reverses, turns 180 degrees, and continues driving.
 
 ---
 
