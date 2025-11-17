@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import time
 from ev3dev2.sensor import INPUT_1, INPUT_2
 from ev3dev2.sensor.lego import ColorSensor
@@ -88,8 +90,8 @@ robot = MoveDifferential(OUTPUT_A, OUTPUT_B, EV3Tire, 114)
 robot.stop()
 
 # --- Parametry prędkości ---
-BASE_SPEED = 40  # % – prędkość bazowa
-DEADBAND = 5  # % – małe błędy ignorowane
+BASE_SPEED = 10  # % – prędkość bazowa
+DEADBAND = 30  # % – małe błędy ignorowane
 MAX_CORRECTION = 100  # % – maksymalna korekta z PID
 SLEW_LIMIT = 200  # maks. zmiana prędkości w jednej iteracji
 
@@ -111,9 +113,8 @@ leftcirclespeed = BASE_SPEED
 ricghtcirclespeed = BASE_SPEED
 
 # PID controller
-pid = PIDController(
-    kp=0.80, ki=0.0, kd=0.015, dt=0.01, integral_limit=10, use_angle=False, d_alpha=0.2
-)
+pid = PIDController(kp=2, ki=0, kd=0, dt=0, integral_limit=3, d_alpha=0.2)
+
 
 # kalibracja (opcjonalnie)
 left_color_sensor.calibrate_white()
@@ -152,7 +153,7 @@ try:
         # Sterowanie prędkościami
         robot.on(SpeedPercent(leftcirclespeed), SpeedPercent(ricghtcirclespeed))
 
-        print("Lewy czujnik: {}, Prawy czujnik: {}".format(L, R))
+        # print("Lewy czujnik: {}, Prawy czujnik: {}".format(L, R))
 
 except KeyboardInterrupt:
-    robot.off()
+    robot.off()                                                                    

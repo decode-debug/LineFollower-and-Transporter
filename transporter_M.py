@@ -15,6 +15,8 @@ from ev3dev2.motor import (
 from ev3dev2.motor import MoveDifferential
 from ev3dev2.wheel import EV3Tire
 
+color_confirm_count = 0
+
 # ---------------- PID ----------------
 
 
@@ -106,7 +108,7 @@ except Exception:
 
 # ---------------- Parametry ruchu i PID ----------------
 BASE_SPEED = 10  # % bazowa prędkość
-DEADBAND = 5  # ignoruj drobne korekty
+DEADBAND = 22  # ignoruj drobne korekty
 MAX_CORRECTION = 100  # maksymalna korekta
 SLEW_LIMIT = 200  # ograniczenie delta prędkości/iterację
 
@@ -123,10 +125,10 @@ def limit_delta(delta, limit):
     return delta
 
 
-leftcirclespeed = BASE_SPEED
+leftcirclespeed = BASE_SPEED 
 ricghtcirclespeed = BASE_SPEED
-
-pid = PIDController(kp=3.8, ki=0.25, kd=0, dt=0.06, integral_limit=3, d_alpha=0.2)
+# ki=0.10, kd=0.06
+pid = PIDController(kp=2, ki=0, kd=0, dt=0, integral_limit=3, d_alpha=0.2)
 
 # opcjonalna kalibracja bieli
 try:
@@ -138,12 +140,12 @@ except Exception as e:
 # ---------------- Logika kolorów ----------------
 # jakie kolory bierzemy pod uwagę
 COLORS_OF_INTEREST = ["red", "green"]
-COLOR_ERROR_GAINS = {"red": 1.0, "green": 1.0, "black": 1.0}
+COLOR_ERROR_GAINS = {"red": 1.4, "green": 1.3, "black": 1.0}
 
 # Debounce / timeouty
 CHECK_INTERVAL = 0.12  # co ile sekund sprawdzać kolor
 # ile kolejnych wykryć by potwierdzić (w tej wersji nieużyteczne, zostawione)
-MIN_COLOR_CONFIRM = 1
+MIN_COLOR_CONFIRM = 2
 COLOR_LOST_TIMEOUT = 10  # timeout gdy nie widzimy danego koloru (s)
 
 # Parametry obrotu (jeżeli wykryjemy kolor jednym sensorem -> obracamy aż drugi zobaczy)
@@ -175,6 +177,10 @@ seen_colors = set(["black"])  # czarny już "widoczny"
 last_check_time = 0.0
 color_seen_time = None
 color_confirm_count = 0
+count_green = 0
+count_red = 0
+turn_side = None
+
 
 # flaga obracania (żeby nie aktywować chwytaka podczas rotacji)
 is_rotating = False
@@ -186,7 +192,6 @@ last_action_time = 0.0
 # maszyna stanów - możliwe stany:
 # 'FOLLOW_BLACK', 'ROTATING', 'FOLLOW_COLOR', 'ACTION'
 current_state = "FOLLOW_BLACK"
-
 
 # ---------------- Funkcje pomocnicze ----------------
 
@@ -267,14 +272,22 @@ def rotate_until_both_see(target_color, initial_side, timeout=ROTATE_TIMEOUT):
     start = time.time()
 
     # kierunek obrotu: gdy left widzi -> obracamy w lewo (left wstecz, right do przodu)
-    if initial_side == "left":
+    if initial_side == "left" and target_color == "red":
         left_speed = -ROTATE_SPEED
         right_speed = ROTATE_SPEED
-        robot.turn_left(SpeedPercent(ROTATE_SPEED), 70)
-    else:
+        robot.turn_left(SpeedPercent(ROTATE_SPEED), 65)
+    elif initial_side == "left" and target_color == "green":
+        left_speed = -ROTATE_SPEED
+        right_speed = ROTATE_SPEED
+        robot.turn_right(SpeedPercent(ROTATE_SPEED), 50)
+    elif initial_side == "right" and target_color == "green":
         left_speed = ROTATE_SPEED
         right_speed = -ROTATE_SPEED
-        robot.turn_right(SpeedPercent(ROTATE_SPEED), 70)
+        robot.turn_right(SpeedPercent(ROTATE_SPEED), 50)
+    elif initial_side == "right" and target_color == "red":
+        left_speed = ROTATE_SPEED
+        right_speed = -ROTATE_SPEED
+        robot.turn_right(SpeedPercent(ROTATE_SPEED), 65)
     try:
         robot.on(SpeedPercent(left_speed), SpeedPercent(right_speed))
     except Exception:
@@ -340,7 +353,7 @@ def open_gripper():
         grip_state = "open"
 
 
-def rotate_180_degrees(speed_pct=30, fallback_seconds=1.3):
+def rotate_180_degrees(speed_pct=10, fallback_seconds=1.3):
     """
     Obrót o ~180 stopni. Najpierw próbujemy MoveDifferential.turn_degrees,
     jeśli nie jest dostępne używamy fallbacku: obrót w miejscu przez określony czas.
@@ -348,7 +361,7 @@ def rotate_180_degrees(speed_pct=30, fallback_seconds=1.3):
     try:
         # print(">>> Rozpoczynam obrót o 180°.")
         # Use speed_pct directly, not wrapped in SpeedPercent
-        robot.turn_degrees(speed_pct, 180)
+        robot.turn_degrees(speed_pct, -110)
     except Exception as e:
         print("Error during rotation: {}".format(e))
         print(">>> Używam fallbacku: obrót w miejscu przez określony czas.")
@@ -386,41 +399,79 @@ def backup_backward(speed_pct=BACKUP_SPEED, seconds=BACKUP_SECONDS):
 
 def state_follow_black(now, L, R, left_name, right_name):
     """
-    Stan: śledzimy czarną. Szukamy nowych kolorów z listy
-    Jeśli wykryjemy nowy kolor z preferencji -> ustawiamy rotate_target i przechodzimy do ROTATING.
-    W tym stanie także wykonujemy normalne PID-owe sterowanie kół.
+    Stan: śledzimy czarną. Z wykryciem koloru — POTWIERDZENIE 2,
+    zanim przejdzie do ROTATING.
     """
-    global current_target, seen_colors, last_check_time, leftcirclespeed, ricghtcirclespeed, pid, color_seen_time
+    global current_target, seen_colors, last_check_time, \
+        leftcirclespeed, ricghtcirclespeed, pid, \
+        color_seen_time, turn_side, count_green, count_red, \
+        color_confirm_count
 
-    # Periodyczne sprawdzanie kolorów (debounce)
+
+    # -----------------------------
+    #       WYKRYCIE KOLORU (2×)
+    # -----------------------------
     if now - last_check_time >= CHECK_INTERVAL:
         last_check_time = now
-        seen_color_now = choose_detected_color(
-            left_name, right_name, COLORS_OF_INTEREST
-        )
-        if seen_color_now is not None and seen_color_now not in seen_colors:
-            # określ stronę początkową
-            initial_side = None
+        seen_color_now = choose_detected_color(left_name, right_name, COLORS_OF_INTEREST)
+
+        # brak koloru → reset licznika
+        if seen_color_now is None:
+            color_confirm_count = 0
+
+        else:
+            # jeśli kolor jest nowy (nie widzieliśmy go wcześniej)
+            if seen_color_now not in seen_colors and seen_color_now != current_target:
+
+                # pierwszy raz go zobaczyliśmy
+                if color_confirm_count == 0:
+                    color_confirm_count = 1
+                    color_seen_time = now
+                    # print(f"Pierwsze wykrycie {seen_color_now}")
+                
+                # drugi raz po przerwie CHECK_INTERVAL → potwierdzony
+                elif color_confirm_count == 1 and (now - color_seen_time >= CHECK_INTERVAL):
+                    color_confirm_count = 2
+                    # print(f"Drugie wykrycie {seen_color_now} — potwierdzam.")
+
+        # jeśli POTWIERDZONY 2× → dopiero wtedy ROTATING
+        if seen_color_now is not None and color_confirm_count >= 2 and seen_color_now not in seen_colors:
+
+            # określ stronę
             if left_name == seen_color_now:
-                initial_side = "left"
+                turn_side = "left"
             elif right_name == seen_color_now:
-                initial_side = "right"
+                turn_side = "right"
+            else:
+                turn_side = "right"
 
-            if initial_side is not None:
-                print(
-                    ">>> Nowy kolor {} wykryty przez {}. Przechodzę do ROTATING.".format(
-                        seen_color_now, initial_side
-                    )
-                )
+            # # statystyka
+            # if seen_color_now == "green":
+            #     count_green += 1
+            # if seen_color_now == "red":
+            #     count_red += 1
 
-                # ustaw target tymczasowo (przechodzi do ROTATING)
-                current_target = seen_color_now
-                return "ROTATING"
+            current_target = seen_color_now
+            print(">>> Kolor {} POTWIERDZONY (2) przez {}. Przechodzę do ROTATING.".format(seen_color_now, turn_side))
 
-    # standardowe PID sterowanie podczas śledzenia czarnej
+            return "ROTATING"
+
+        # # Po zobaczeniu koloru wcześniej widzianego — robot skręca (np. drugi raz ten sam kolor)
+        # if "red" in seen_colors or "green" in seen_colors:
+        #     if turn_side == "left":
+        #         robot.turn_degrees(30, -90)
+        #     elif turn_side == "right":
+        #         robot.turn_degrees(30, 90)
+
+    # -----------------------------
+    #       NORMALNE ŚLEDZENIE PID
+    # -----------------------------
     current_gain = COLOR_ERROR_GAINS.get("black", 1.0)
-    if abs(R - L > 50):
-        current_gain = current_gain * 1.5
+
+    # agresywniejszy PID przy nagłej różnicy
+    if abs(R - L) > 50:
+        current_gain *= 1.5
+
     leftcirclespeed, ricghtcirclespeed, correction = apply_pid_speed_control(
         leftcirclespeed, ricghtcirclespeed, (R - L), current_gain
     )
@@ -428,10 +479,10 @@ def state_follow_black(now, L, R, left_name, right_name):
     if not is_rotating:
         robot.on(SpeedPercent(leftcirclespeed), SpeedPercent(ricghtcirclespeed))
 
-    # sprawdzanie: jeśli oba czujniki widzą ten sam kolor (dowolny), to możliwa akcja
-    if (
-        (not is_rotating) and (left_name is not None) and (left_name == right_name)
-    ):
+    # -----------------------------
+    #      OBA CZUJNIKI → ACTION
+    # -----------------------------
+    if (not is_rotating) and (left_name is not None) and (left_name == right_name):
         if now - last_action_time >= ACTION_COOLDOWN:
             return "ACTION"
 
@@ -496,8 +547,10 @@ def state_follow_color(now, L, R, left_name, right_name):
     Jeśli stracimy kolor dłużej niż timeout -> FOLLOW_BLACK.
     W tym stanie także sterujemy PIDem (z innym gainem).
     """
-    global current_target, color_seen_time, leftcirclespeed, ricghtcirclespeed, pid, last_action_time
-
+    global current_target, color_seen_time, leftcirclespeed, ricghtcirclespeed, pid, last_action_time, DEADBAND
+    if current_target == "red":
+        initialDeadband = DEADBAND
+        DEADBAND = 15
     # jeśli widzimy czarny -> natychmiast powrót
     if left_name == "black" or right_name == "black":
         prev = current_target
@@ -548,7 +601,8 @@ def state_follow_color(now, L, R, left_name, right_name):
     ):
         if now - last_action_time >= ACTION_COOLDOWN:
             return "ACTION"
-
+    if current_target == "red":
+        DEADBAND = initialDeadband
     return "FOLLOW_COLOR"
 
 
@@ -590,7 +644,7 @@ def state_action(now, L, R, left_name, right_name):
         print(">>> Otwieram chwytak (rozluźniam).")
         open_gripper()
         sleep(0.15)
-        print(">>> Cofanie po otwarciu.")
+        print(">>> Cofanie po otwarciu.")1.5 * 
         backup_backward(speed_pct=BACKUP_SPEED, seconds=BACKUP_SECONDS)
         rotate_180_degrees(speed_pct=30, fallback_seconds=1.3)
         pid.reset()
@@ -630,7 +684,7 @@ try:
         last_time = now
         pid.dt = dt
 
-        if now - last_time1 > 0.1:
+        if now - last_time1 > 0.04:
             # Odczyt kolorów (często, bo potrzebny do wykryć)
             left_name, right_name = read_both_colors()
             last_time1 = now
